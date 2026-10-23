@@ -188,7 +188,7 @@ tr:last-child td { border-bottom: 0; }
 .best b { color: var(--ink); }
 
 /* Estatísticas */
-.stats { display: grid; grid-template-columns: repeat(12, minmax(0, 1fr)); gap: 18px; }
+.stats { display: grid; grid-template-columns: repeat(12, minmax(0, 1fr)); gap: 18px; align-items: start; }
 .span-12 { grid-column: span 12; } .span-7 { grid-column: span 7; } .span-5 { grid-column: span 5; } .span-6 { grid-column: span 6; } .span-4 { grid-column: span 4; } .span-8 { grid-column: span 8; }
 .heatgrid { display: grid; grid-template-columns: repeat(10, 1fr); gap: 4px; }
 .hc { aspect-ratio: 1; max-width: 100%; border-radius: 7px; display: flex; flex-direction: column; align-items: center; justify-content: center; background: color-mix(in oklab, var(--accent) var(--h, 0%), var(--surface)); border: 1px solid var(--grid); font-family: var(--f-display); line-height: 1; padding: 0; }
@@ -396,7 +396,7 @@ const S = {
   sel: [], example: false, tab: 'simulador',
   from: FIRST_Y, to: LAST_Y, preset: 'all', mode: 'all',
   heat: load('heat', false), saved: load('saved', []),
-  tf: 'all', sort: 'date', lim: 25
+  tf: 'all', sort: 'date', lim: 25, grp: 2
 };
 function period() {
   return ALL.filter(c => c.y >= S.from && c.y <= S.to && (S.mode === 'all' || c.v));
@@ -782,6 +782,50 @@ function updateSticky(r) {
 function syncSticky() { sticky.hidden = !(sticky.dataset.ok && S.tab === 'simulador' && !verdictVisible); }
 sticky.addEventListener('click', () => { const v = $('#verdict'); if (v) v.scrollIntoView({ behavior: 'smooth', block: 'start' }); });
 
+/* ---------- grupos que saem juntos ---------- */
+function countGroups(list, k) {
+  const m = new Map();
+  const idx = k === 2 ? [[0,1],[0,2],[0,3],[0,4],[0,5],[1,2],[1,3],[1,4],[1,5],[2,3],[2,4],[2,5],[3,4],[3,5],[4,5]] : combIdx(k);
+  list.forEach(c => { const b = c.b; idx.forEach(ix => { let key = 0; for (const i of ix) key = key * 61 + b[i]; m.set(key, (m.get(key) || 0) + 1); }); });
+  return m;
+}
+const _ci = {};
+function combIdx(k) {
+  if (_ci[k]) return _ci[k];
+  const out = [], cur = [];
+  (function rec(st) { if (cur.length === k) { out.push(cur.slice()); return; } for (let i = st; i < 6; i++) { cur.push(i); rec(i + 1); cur.pop(); } })(0);
+  return (_ci[k] = out);
+}
+function decode(key, k) { const r = []; for (let i = 0; i < k; i++) { r.unshift(key % 61); key = Math.floor(key / 61); } return r; }
+function renderGroups(card, list) {
+  const N = list.length, k = S.grp || 2;
+  const m = countGroups(list, k);
+  const total = C(60, k), occ = N * C(6, k), mean = occ / total, never = total - m.size;
+  const arr = [...m.entries()].sort((a, b) => b[1] - a[1] || a[0] - b[0]);
+  const cut = arr.length >= 10 ? arr[9][1] : (arr.length ? arr[arr.length - 1][1] : 0);
+  let show = arr.filter(e => e[1] >= cut && e[1] > 0);
+  const topV = arr.length ? arr[0][1] : 0, tiedTop = arr.filter(e => e[1] === topV).length;
+  const CAP = Math.min(20, Math.max(10, tiedTop)); let extra = 0, extraVal = 0;
+  if (show.length > CAP) { extra = show.length - CAP; extraVal = show[CAP][1]; show = show.slice(0, CAP); }
+  const top = arr.length ? arr[0][1] : 1;
+  const name = { 2: ['Duplas', 'dupla', 'duplas', 'juntas'], 3: ['Triplas', 'tripla', 'triplas', 'juntas'], 4: ['Quartetos', 'quarteto', 'quartetos', 'juntos'] }[k];
+  const lead = k === 2
+    ? `Pela probabilidade, cada dupla sairia junto ${nf1.format(mean)} vezes.`
+    : `Pela probabilidade, cada ${name[1]} sairia em média ${mean >= 1 ? nf1.format(mean) + ' vezes' : nf2.format(mean) + ' vez'}. ${pct(never / total, 0)} das ${int(total)} combinações nunca saíram.`;
+  const tied = show.filter(e => e[1] === top).length;
+  const w = 32 * k + 2;
+  // curiosidade: grupos de 5 que se repetiram e resultados completos repetidos
+  const q5 = countGroups(list, 5); let rep5 = 0, max5 = 0; q5.forEach(v => { if (v >= 2) rep5++; if (v > max5) max5 = v; });
+  const s6 = new Map(); let rep6 = 0; list.forEach(c => { const key = c.b.join('-'); s6.set(key, (s6.get(key) || 0) + 1); }); s6.forEach(v => { if (v >= 2) rep6++; });
+  card.innerHTML = `<div class="thead-row" style="margin-bottom:4px"><h3>${name[0]} que mais saíram ${name[3]}</h3></div>
+    <div class="seg" role="group" aria-label="Tamanho do grupo" style="margin:4px 0 8px">${[2, 3, 4].map(x => `<button data-grp="${x}" aria-pressed="${x === k}">${{ 2: 'Duplas', 3: 'Triplas', 4: 'Quartetos' }[x]}</button>`).join('')}</div>
+    <p class="lead">${lead}${k > 2 && tied > 1 ? ` ${int(tied)} ${name[2]} empatam no topo, com ${int(top)} vezes cada.` : ''}</p>
+    <div class="rank">${show.map(e => { const g = decode(e[0], k); return `<div class="rk" style="grid-template-columns:${w}px minmax(0,1fr) auto"><span class="balls">${g.map(x => `<span class="ball">${pad(x)}</span>`).join('')}</span><span class="bar"><i style="width:${(e[1] / top * 100).toFixed(1)}%"></i></span><span class="num">${int(e[1])}</span></div>`; }).join('') || '<p class="note">Nenhuma combinação no período.</p>'}</div>
+    ${extra ? `<p class="note" style="margin:8px 0 0">E mais ${int(extra)} ${name[2]} com ${int(extraVal)} ${extraVal === 1 ? 'vez' : 'vezes'}.</p>` : ''}
+    <p class="note" style="margin:12px 0 0;padding-top:10px;border-top:1px dashed var(--line)">${rep5 ? `${int(rep5)} grupos de 5 dezenas já saíram juntos ${max5 > 2 ? 'mais de uma vez' : 'duas vezes'}: quem tivesse esses 5 números no jogo faria a quina ${max5 > 2 ? 'mais de uma vez' : 'duas vezes'}.` : 'Nenhum grupo de 5 dezenas se repetiu no período.'} ${rep6 ? `${int(rep6)} resultado${rep6 > 1 ? 's' : ''} de 6 dezenas se repetiu.` : 'Nenhum resultado de 6 dezenas se repetiu.'}</p>`;
+  card.querySelectorAll('[data-grp]').forEach(b => b.addEventListener('click', () => { S.grp = +b.dataset.grp; renderGroups(card, list); }));
+}
+
 /* ---------- estatísticas ---------- */
 function renderStats() {
   const box = $('#stats'); box.innerHTML = '';
@@ -825,15 +869,12 @@ function renderStats() {
   gc.innerHTML = `<h3>Maiores jejuns</h3><p class="lead">O maior intervalo sem sair que cada dezena já teve no período.</p><div class="rank">${gap.slice(0, 10).map(x => `<div class="rk" style="grid-template-columns:30px minmax(0,1fr) auto 92px"><span class="ball">${pad(x)}</span><span class="bar alt"><i style="width:${(fr.maxGap[x] / gmax * 100).toFixed(1)}%"></i></span><span class="num">${int(fr.maxGap[x])}</span><span class="note num" style="text-align:right">${fr.gapAt[x] ? (fr.gapAt[x][0] ? fr.gapAt[x][0] + ' → ' + (fr.gapAt[x][1] || 'hoje') : 'até ' + fr.gapAt[x][1]) : ''}</span></div>`).join('')}</div><p class="note" style="margin:10px 0 0">À direita, os concursos entre os quais a dezena ficou sem sair.</p>`;
   box.appendChild(gc);
 
-  // Duplas
-  const pairs = new Uint16Array(61 * 61);
-  list.forEach(c => { const b = c.b; for (let i = 0; i < 6; i++) for (let j = i + 1; j < 6; j++) pairs[b[i] * 61 + b[j]]++; });
-  const pl = []; for (let a = 1; a <= 60; a++) for (let b = a + 1; b <= 60; b++) pl.push([a, b, pairs[a * 61 + b]]);
-  pl.sort((x, y) => y[2] - x[2] || x[0] - y[0]);
-  const pexp = N * 15 / 1770;
+  // Números que saem juntos: duplas, triplas e quartetos
   const pc = el('div', 'card span-4');
-  pc.innerHTML = `<h3>Duplas que mais saíram juntas</h3><p class="lead">Pela probabilidade, cada par sairia junto ${nf1.format(pexp)} vezes.</p><div class="rank">${pl.slice(0, 10).map(p => `<div class="rk" style="grid-template-columns:62px minmax(0,1fr) auto"><span class="balls"><span class="ball">${pad(p[0])}</span><span class="ball">${pad(p[1])}</span></span><span class="bar"><i style="width:${(p[2] / pl[0][2] * 100).toFixed(1)}%"></i></span><span class="num">${int(p[2])}</span></div>`).join('')}</div>`;
   box.appendChild(pc);
+  renderGroups(pc, list);
+  const stack = el('div', 'span-8'); stack.style.cssText = 'display:flex;flex-direction:column;gap:18px;min-width:0';
+  box.appendChild(stack);
 
   // Perfil dos sorteios
   const even = [0, 0, 0, 0, 0, 0, 0], rep = [0, 0, 0, 0, 0, 0, 0]; let consec = 0; const sums = [];
@@ -848,7 +889,7 @@ function renderStats() {
   const repN = rep.reduce((a, b) => a + b, 0);
   const evExp = [0, 1, 2, 3, 4, 5, 6].map(k => N * C(30, k) * C(30, 6 - k) / C606);
   const repExp = [0, 1, 2, 3, 4, 5, 6].map(k => repN * C(6, k) * C(54, 6 - k) / C606);
-  const pfc = el('div', 'card span-8');
+  const pfc = el('div', 'card');
   pfc.innerHTML = `<h3>Perfil dos sorteios</h3><p class="lead">Como os resultados se distribuem. O traço mostra o esperado pela probabilidade.</p>
     <div class="legend"><span><i class="keybox" style="background:var(--accent)"></i>Concursos</span><span><i class="keytick"></i>Esperado</span></div>
     <div class="cols2"><div><p class="eyebrow" style="margin:0">Dezenas pares no resultado</p><div class="chart" id="evc"></div></div><div><p class="eyebrow" style="margin:0">Dezenas repetidas do concurso anterior</p><div class="chart" id="repc"></div></div></div>
@@ -857,7 +898,7 @@ function renderStats() {
       <div><span class="val">${int(Math.round(sums.reduce((a, b) => a + b, 0) / N))}</span><small>é a soma média das 6 dezenas (esperado: 183)</small></div>
       <div><span class="val">${int(Math.min(...sums))} a ${int(Math.max(...sums))}</span><small>menor e maior soma já sorteadas no período</small></div>
     </div>`;
-  box.appendChild(pfc);
+  stack.appendChild(pfc);
   barChart(pfc.querySelector('#evc'), ['0', '1', '2', '3', '4', '5', '6'], even, { exp: evExp, h: 190, aria: 'Concursos por quantidade de dezenas pares',
     tip: i => `<b>${i} par${i === 1 ? '' : 'es'}</b> e ${6 - i} ímpar${6 - i === 1 ? '' : 'es'}: ${int(even[i])} concursos (${pct(even[i] / N)})<br>esperado: ${int(Math.round(evExp[i]))}` });
   barChart(pfc.querySelector('#repc'), ['0', '1', '2', '3', '4', '5', '6'], rep, { exp: repExp, h: 190, aria: 'Concursos por dezenas repetidas do anterior',
@@ -866,7 +907,7 @@ function renderStats() {
   // Somas (histograma) — card ao lado
   const bins = []; const bw = 20; for (let s = 20; s < 340; s += bw) bins.push(s);
   const hv = bins.map(s => sums.filter(x => x >= s && x < s + bw).length);
-  const side = el('div', 'span-4'); side.style.cssText = 'display:flex;flex-direction:column;gap:18px;min-width:0';
+  const side = stack;
   const sc = el('div', 'card');
   sc.innerHTML = `<h3>Soma das 6 dezenas</h3><p class="lead">Concursos por faixa de soma. A maioria fica entre 140 e 240.</p><div class="chart" id="sumc"></div>`;
   side.appendChild(sc);
@@ -891,17 +932,17 @@ function renderStats() {
     <div class="tbl-wrap"><table><thead><tr><th>Concurso</th><th>Data</th><th>Dezenas</th><th class="r">Ganhadores</th><th class="r">Prêmio por aposta</th></tr></thead><tbody>
     ${top.map(c => `<tr><td class="num"><b>${c.n}</b>${c.v ? '<span class="tag">Virada</span>' : ''}</td><td class="num">${fmtD(c.d)}</td><td><span class="balls">${c.b.map(b => `<span class="ball">${pad(b)}</span>`).join('')}</span></td><td class="r num">${int(c.g6)}</td><td class="r num"><b>${brl(c.r6)}</b></td></tr>`).join('') || '<tr><td colspan="5" class="muted">Ninguém acertou a sena nesse período.</td></tr>'}
     </tbody></table></div>`;
-  box.appendChild(prc); box.appendChild(side);
+  box.appendChild(prc);
 
   // Estados
   const ufc = new Map(); let ufTot = 0;
   list.forEach(c => { if (c.g6 > 0) c.uf.forEach(u => { ufc.set(u, (ufc.get(u) || 0) + 1); ufTot++; }); });
   const ufl = [...ufc.entries()].sort((a, b) => b[1] - a[1]);
   const um = ufl.length ? ufl[0][1] : 1;
-  const ucard = el('div', 'card'); ucard.style.flex = '1';
+  const ucard = el('div', 'card span-4');
   ucard.innerHTML = `<h3>Onde saíram as senas</h3><p class="lead">Locais informados pela Caixa para as apostas vencedoras. “Internet” são apostas feitas online.</p>
     ${ufl.length ? `<div class="rank">${ufl.slice(0, 8).map(([u, v]) => `<div class="rk" style="grid-template-columns:62px minmax(0,1fr) auto"><span style="font-weight:600;font-size:13px">${u === 'WEB' ? 'Internet' : u}</span><span class="bar"><i style="width:${(v / um * 100).toFixed(1)}%"></i></span><span class="num">${int(v)}</span></div>`).join('')}</div>` : '<p class="note">Sem senas no período.</p>'}`;
-  side.appendChild(ucard);
+  box.appendChild(ucard);
 
   box.appendChild(el('div', 'callout span-12', `Cada sorteio é independente. Uma dezena que saiu muito, ou que está atrasada, tem a mesma chance de sair no próximo concurso que qualquer outra: 1 em 10. As diferenças acima são o que o acaso produz em ${int(N)} sorteios.`));
 }

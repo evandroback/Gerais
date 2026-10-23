@@ -10,7 +10,7 @@ E se você tivesse jogado sempre os mesmos números? Você marca de 6 a 20 dezen
 - **Atalhos:** surpresinha, dezenas mais e menos sorteadas, mais atrasadas, digitar dezenas ou repetir o resultado de um concurso.
 - **Filtros:** período (desde 1996, 10, 5 ou 1 ano, ou anos à escolha) e "só Mega da Virada".
 - **Jogos salvos:** ficam no navegador de quem salvou e servem para comparar jogos no mesmo período.
-- **Estatísticas:** frequência das dezenas, atrasos, maiores jejuns, duplas, pares e ímpares, repetições, soma das dezenas, maiores prêmios e estados onde saíram as senas.
+- **Estatísticas:** frequência das dezenas, atrasos, maiores jejuns, duplas, triplas e quartetos que mais saíram juntos, pares e ímpares, repetições, soma das dezenas, maiores prêmios e estados onde saíram as senas.
 
 ## Dados
 
