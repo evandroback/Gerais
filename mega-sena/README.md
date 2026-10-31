@@ -14,7 +14,7 @@ E se você tivesse jogado sempre os mesmos números? Você marca de 6 a 20 dezen
 
 ## Dados
 
-Planilha oficial de resultados da Mega-Sena da Caixa, com todos os concursos até o nº 3073 (22/10/2026): dezenas, ganhadores e valor por faixa, e o valor acumulado da sena. Os dados ficam embutidos no `mega-sena/index.html`; a página não consulta nenhum serviço externo.
+Resultados oficiais da Caixa (planilha de resultados e, para os concursos mais recentes, o portal de Loterias), com todos os concursos até o nº 3079 (30/10/2026): dezenas, ganhadores e valor por faixa, e o valor acumulado da sena. Os dados ficam embutidos no `mega-sena/index.html`; a página não consulta nenhum serviço externo.
 
 ## Como calcula
 
